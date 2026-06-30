@@ -4,6 +4,7 @@ const dir = __dirname, port = process.env.PORT || 3470;
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png' };
 
 http.createServer((req, res) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405); res.end('method not allowed'); return; }
   let url = req.url.split('?')[0];
   if (url === '/data/daily-metrics.json') {
     try {
@@ -20,9 +21,15 @@ http.createServer((req, res) => {
   }
   if (url === '/') url = '/index.html';
   const fp = path.join(dir, decodeURIComponent(url));
+  // containment: never serve outside the project dir (path.join collapses ../)
+  if (fp !== dir && !fp.startsWith(dir + path.sep)) { res.writeHead(403); res.end('forbidden'); return; }
   fs.readFile(fp, (e, d) => {
     if (e) { res.writeHead(404); res.end('not found'); return; }
-    res.writeHead(200, { 'Content-Type': mime[path.extname(fp)] || 'text/plain' });
+    const ext = path.extname(fp);
+    const headers = { 'Content-Type': mime[ext] || 'text/plain' };
+    // HTML must revalidate so a redeploy is seen immediately; hashed-ish assets can be cached briefly
+    if (ext === '.html') headers['Cache-Control'] = 'no-cache';
+    res.writeHead(200, headers);
     res.end(d);
   });
 }).listen(port, () => console.log('variations87-core — http://localhost:' + port));

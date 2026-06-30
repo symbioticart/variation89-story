@@ -35,8 +35,8 @@
     const INCEPTION = '2022-05-24';       // the work has been alive since this day
 
     // framed portrait painting, with margins / outline / shadow like the site
-    // top margin 150 == gap frame→plate (≈ "hung object" symmetry, per artist)
-    const FX = 80, FY = 150, PW = 920, PH = 1130;   // painting box; bottom = 1280
+    // more top air (FY 195) + ~20% taller painting downward (PH 1350); bottom = 1545
+    const FX = 80, FY = 195, PW = 920, PH = 1350;   // painting box; bottom = 1545
 
     const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
     const fmtDate = d => { const [y,m,da] = d.split('-'); return da + ' ' + MONTHS[+m-1] + ' ' + y; };
@@ -46,8 +46,13 @@
       try {
         const DATA = await fetch('data/daily-metrics.json', { cache: 'no-store' }).then(r => r.json());
         let idx = Math.max(0, DATA.days.length - 1);
-        if (params.has('day')) idx = Math.max(0, Math.min(DATA.days.length - 1, +params.get('day')));
+        if (params.has('day')) {
+          // sanitize: floor + finite-check so ?day=abc / ?day=5.9 can't index DATA.days with NaN/fraction
+          const n = parseInt(params.get('day'), 10);
+          if (Number.isFinite(n)) idx = Math.max(0, Math.min(DATA.days.length - 1, n));
+        }
         const day = DATA.days[idx];
+        if (!day) { showErr(new Error('no data for day ' + idx)); return; }
 
         // try to get the brand fonts, but NEVER hang on them — cap the wait at 2.5s,
         // then render with whatever is available (system fallback if the font CDN is blocked).
@@ -100,10 +105,26 @@
 
     // save the full-res 1080×1920 poster as a PNG to the device
     function downloadPNG() {
+      if (!window.__STORY_READY) return;          // ignore taps before the poster is composited
       var canvas = document.getElementById('story');
       var d = window.__dlDay;
       var name = 'variation-89-' + (d && d.day ? d.day : 'today') + '.png';
-      canvas.toBlob(function (blob) {
+      // iOS Safari ignores <a download> and won't save a blob — open the PNG so the user long-presses → Save to Photos
+      var isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      if (isIOS) {
+        var url = canvas.toDataURL('image/png');
+        var w = window.open();
+        if (w) {
+          w.document.title = name;
+          w.document.body.style.margin = '0';
+          w.document.body.innerHTML = '<img src="' + url + '" style="width:100%;display:block" alt="' + name + '">';
+        } else {
+          location.href = url;                    // popup blocked → navigate to the image
+        }
+        return;
+      }
+      canvas.toBlob(function (blob) {              // desktop / Android: real file download
         if (!blob) return;
         var a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
@@ -138,55 +159,55 @@
       ctx.strokeStyle = 'rgba(0,0,0,0.09)'; ctx.lineWidth = 1;
       ctx.strokeRect(FX + 0.5, FY + 0.5, PW - 1, PH - 1);
 
-      // ===== plate (museum label) — site DNA, quiet, all above IG reply-bar (≤1538) =====
+      // ===== plate (museum label) — site DNA, larger + more legible, still above IG reply-bar (≤~1745) =====
       // Hierarchy descends in all three channels: size, opacity, width. No divider (pure wall).
       ctx.textAlign = 'center';
       var cx = W / 2;
       var DOT = '  ·  ';
 
-      // TITLE — Manrope 400, 24px, ls 0.15em, uppercase. main @.75 / year @.55
-      var tY = 1424;
-      ctx.font = '400 24px Manrope';
-      try { ctx.letterSpacing = '3.6px'; } catch (e) {}
+      // TITLE — Manrope 400, 28px, ls 0.15em, uppercase. main @.78 / year @.55
+      var tY = 1606;
+      ctx.font = '400 28px Manrope';
+      try { ctx.letterSpacing = '4.2px'; } catch (e) {}
       var titleMain = 'VARIATION 89';
       var titleYear = '   ·   2022—TODAY';
       var wMain = ctx.measureText(titleMain).width;
       var wYear = ctx.measureText(titleYear).width;
       var startX = cx - (wMain + wYear) / 2;
       ctx.textAlign = 'left';
-      ctx.fillStyle = alphaInk(0.75); ctx.fillText(titleMain, startX, tY);
+      ctx.fillStyle = alphaInk(0.78); ctx.fillText(titleMain, startX, tY);
       ctx.fillStyle = alphaInk(0.55); ctx.fillText(titleYear, startX + wMain, tY);
       ctx.textAlign = 'center';
 
-      // SUB — durational lifespan line. JetBrains Mono 300, 17px, ls 0.14em, uppercase, @.5 ; green "alive" dot
-      var sY = 1468;
-      ctx.font = '300 17px "JetBrains Mono"';
-      try { ctx.letterSpacing = '2.2px'; } catch (e) {}
+      // SUB — durational lifespan line. JetBrains Mono 300, 19px, ls 0.14em, uppercase, @.55 ; green "alive" dot
+      var sY = 1656;
+      ctx.font = '300 19px "JetBrains Mono"';
+      try { ctx.letterSpacing = '2.6px'; } catch (e) {}
       var subText = dead ? 'SIGNAL LOST' : lifespanText(DATA);
-      ctx.fillStyle = alphaInk(0.5);
+      ctx.fillStyle = alphaInk(0.55);
       if (dead) {
         ctx.fillText(subText, cx, sY);
       } else {
         // center the WHOLE unit (dot + gap + text), not the text alone
-        var r = 3.5, gap = 12;
+        var r = 4, gap = 13;
         var subW = ctx.measureText(subText).width;
         var unitW = r * 2 + gap + subW;
         var uStart = cx - unitW / 2;
-        ctx.save(); ctx.beginPath(); ctx.arc(uStart + r, sY - 5, r, 0, Math.PI * 2);
+        ctx.save(); ctx.beginPath(); ctx.arc(uStart + r, sY - 6, r, 0, Math.PI * 2);
         ctx.fillStyle = DOT_GREEN; ctx.fill(); ctx.restore();
-        ctx.textAlign = 'left'; ctx.fillStyle = alphaInk(0.5);
+        ctx.textAlign = 'left'; ctx.fillStyle = alphaInk(0.55);
         ctx.fillText(subText, uStart + r * 2 + gap, sY);
         ctx.textAlign = 'center';
       }
 
       // MEDIUM — provenance credit, two meaning-grouped lines (museum credit wrap).
-      // JetBrains Mono 300, 15px, ls 0.10em, uppercase. Keeps symbiotic art + Oura Ring.
-      ctx.font = '300 15px "JetBrains Mono"';
-      try { ctx.letterSpacing = '1.5px'; } catch (e) {}
-      ctx.fillStyle = alphaInk(0.38);
-      ctx.fillText('SYMBIOTIC PAINTING · GENERATIVE OIL', cx, 1506);
-      ctx.fillStyle = alphaInk(0.34);
-      ctx.fillText('LIVE OURA RING BIOMETRICS', cx, 1532);
+      // JetBrains Mono 300, 16px, ls 0.10em, uppercase. Keeps symbiotic art + Oura Ring.
+      ctx.font = '300 16px "JetBrains Mono"';
+      try { ctx.letterSpacing = '1.6px'; } catch (e) {}
+      ctx.fillStyle = alphaInk(0.45);
+      ctx.fillText('SYMBIOTIC PAINTING · GENERATIVE OIL', cx, 1696);
+      ctx.fillStyle = alphaInk(0.42);
+      ctx.fillText('LIVE OURA RING BIOMETRICS', cx, 1724);
       try { ctx.letterSpacing = '0px'; } catch (e) {}
 
       window.__STORY_READY = true;
