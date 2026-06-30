@@ -6,7 +6,9 @@
   <title>CORE — Variation 89 (story)</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400&family=JetBrains+Mono:wght@300;400&display=swap" rel="stylesheet">
+  <!-- non-blocking: if Google Fonts is slow/blocked, the page never hangs — system fonts fall back -->
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400&family=JetBrains+Mono:wght@300;400&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400&family=JetBrains+Mono:wght@300;400&display=swap" rel="stylesheet"></noscript>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; background: #1a1a1a; display: flex; align-items: center; justify-content: center; }
@@ -21,7 +23,7 @@
   <div id="dl" title="Save PNG" aria-label="Download poster"></div>
   <div id="off"></div>
 
-  <script src="https://cdn.jsdelivr.net/npm/p5@2.2.0/lib/p5.min.js"></script>
+  <script src="p5.min.js"></script>
   <script src="p5.oil.js"></script>
   <script src="painter.js"></script>
   <script>
@@ -47,11 +49,13 @@
         if (params.has('day')) idx = Math.max(0, Math.min(DATA.days.length - 1, +params.get('day')));
         const day = DATA.days[idx];
 
-        await Promise.all([
+        // try to get the brand fonts, but NEVER hang on them — cap the wait at 2.5s,
+        // then render with whatever is available (system fallback if the font CDN is blocked).
+        var fontsReady = Promise.all([
           document.fonts.load('400 26px Manrope'),
           document.fonts.load('300 17px "JetBrains Mono"'),
-        ]).catch(function(){});
-        await document.fonts.ready;
+        ]).then(function () { return document.fonts.ready; }).catch(function () {});
+        await Promise.race([fontsReady, new Promise(function (r) { setTimeout(r, 2500); })]);
 
         var canvasEl = null, pending = true;
         new p5(function (p) {
